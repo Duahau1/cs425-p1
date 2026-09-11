@@ -1,21 +1,129 @@
 #include "lab.h"
+#include "client.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
 
 #ifdef TEST
 #define main main_exclude
 #endif
 
-
-
-int main(void)
+int main(int argc, char *argv[])
 {
-    char *greeting = get_greeting("World");
-    if (greeting) {
-        printf("%s\n", greeting);
-        free(greeting); // Free the allocated memory for the greeting
-    } else {
-        printf("Failed to create greeting.\n");
+    if (argc == 1)
+    {
+        print_manual();
+        return EXIT_SUCCESS;
     }
+
+    REQUEST_HEADER *request = parse_opt(argc, argv, OPT_STRING);
+    if (request == NULL || request->host == NULL ||
+        request->sender == NULL || request->receiver == NULL)
+    {
+        print_manual();
+        free(request);
+        return 1;
+    }
+
+    char body[BUF_SIZE] = "";
+    if (request->body == NULL)
+    {
+        char line[256];
+        size_t body_length = 0;
+
+        printf("Enter mail body (blank line to finish):\n");
+        while (fgets(line, sizeof(line), stdin) != NULL && line[0] != '\n')
+        {
+            size_t line_length = strlen(line);
+            if (line_length > BUF_SIZE - body_length - 1)
+            {
+                fprintf(stderr, "Mail body is too long.\n");
+                free(request);
+                return EXIT_FAILURE;
+            }
+
+            memcpy(body + body_length, line, line_length);
+            body_length += line_length;
+            body[body_length] = '\0';
+        }
+        request->body = body;
+    }
+
+    int sock = init_socket(request->host, request->port);
+    if (sock < 0)
+    {
+        free(request);
+        return 2;
+    }
+
+    char cmd[BUF_SIZE];
+
+    // 2. read greeting
+    if (smtp_command(sock, NULL, 220) < 0)
+    {
+        close(sock);
+        free(request);
+        return 2;
+    }
+
+    // 3. SMTP session
+    snprintf(cmd, BUF_SIZE, "HELO %s\r\n", request->helo_host);
+    if (smtp_command(sock, cmd, 250) < 0)
+    {
+        close(sock);
+        free(request);
+        return 2;
+    }
+
+    snprintf(cmd, BUF_SIZE, "MAIL FROM:<%s>\r\n", request->sender);
+    if (smtp_command(sock, cmd, 250) < 0)
+    {
+        close(sock);
+        free(request);
+        return 2;
+    }
+
+    snprintf(cmd, BUF_SIZE, "RCPT TO:<%s>\r\n", request->receiver);
+    if (smtp_command(sock, cmd, 250) < 0)
+    {
+        close(sock);
+        free(request);
+        return 2;
+    }
+
+    if (smtp_command(sock, "DATA\r\n", 354) < 0)
+    {
+        close(sock);
+        free(request);
+        return 2;
+    }
+
+    // 4. headers and body
+    snprintf(cmd, BUF_SIZE,
+             "Subject: %s\r\n"
+             "From: %s\r\n"
+             "To: %s\r\n"
+             "\r\n" // blank line ends headers
+             "%s\r\n"
+             ".\r\n", // line with only a period ends the body
+             request->subject, request->sender, request->receiver, request->body);
+    if (smtp_command(sock, cmd, 250) < 0)
+    {
+        close(sock);
+        free(request);
+        return 2;
+    }
+
+    // 5. end session
+    if (smtp_command(sock, "QUIT\r\n", 221) < 0)
+    {
+        close(sock);
+        free(request);
+        return 2;
+    }
+    free(request);
+    close(sock);
+
     return 0;
 }
