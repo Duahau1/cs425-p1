@@ -19,13 +19,7 @@ typedef enum
     OPTION_COUNT
 } CLIENT_OPTION;
 
-static const char *clientOption[OPTION_COUNT] = {
-    [OPTION_FROM] = "f",
-    [OPTION_TO] = "t",
-    [OPTION_SUBJECT] = "s",
-    [OPTION_BODY] = "b",
-    [OPTION_PORT] = "p",
-    [OPTION_HOST] = "H"};
+extern const char *clientOption[OPTION_COUNT];
 
 typedef struct
 {
@@ -53,6 +47,8 @@ extern const char *OPT_STRING;
 void print_manual(void);
 
 REQUEST_HEADER *parse_opt(int argc, char *const argv[], const char *optstring);
+
+char *dot_stuff_body(const char *body);
 
 int init_socket(const char *host, int port);
 

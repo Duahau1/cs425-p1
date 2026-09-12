@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <string.h>
 #include <unistd.h>
 #include <sys/socket.h>
@@ -7,10 +8,16 @@
 #include <netdb.h>
 
 #include "utils.h"
-#include "smtp.h"
 #include "lab.h"
 
 const char *OPT_STRING = "f:t:s:b:p:H:";
+const char *clientOption[OPTION_COUNT] = {
+    [OPTION_FROM] = "f",
+    [OPTION_TO] = "t",
+    [OPTION_SUBJECT] = "s",
+    [OPTION_BODY] = "b",
+    [OPTION_PORT] = "p",
+    [OPTION_HOST] = "H"};
 
 void print_manual(void)
 {
@@ -30,6 +37,7 @@ void print_manual(void)
 REQUEST_HEADER *parse_opt(int argc, char *const argv[], const char *optstring)
 {
     int option;
+    int option_index;
     char *from = NULL;
     char *to = NULL;
     char *subject = "";
@@ -55,27 +63,38 @@ REQUEST_HEADER *parse_opt(int argc, char *const argv[], const char *optstring)
             free(requestHeader);
             return NULL;
         }
-        switch (option)
+
+        option_index = -1;
+        for (int index = 0; index < OPTION_COUNT; index++)
+        {
+            if (option == clientOption[index][0])
+            {
+                option_index = index;
+                break;
+            }
+        }
+
+        switch (option_index)
         {
 
-        case 'f':
+        case OPTION_FROM:
             from = optarg;
             break;
 
-        case 't':
+        case OPTION_TO:
             to = optarg;
             break;
 
-        case 's':
+        case OPTION_SUBJECT:
             subject = optarg;
             break;
-        case 'b':
+        case OPTION_BODY:
             body = optarg;
             break;
-        case 'p':
+        case OPTION_PORT:
             port = atoi(optarg);
             break;
-        case 'H':
+        case OPTION_HOST:
             if (optind < argc && argv[optind][0] != '-')
             {
                 helo_server = optarg;
@@ -105,14 +124,74 @@ REQUEST_HEADER *parse_opt(int argc, char *const argv[], const char *optstring)
     return requestHeader;
 }
 
+char *dot_stuff_body(const char *body)
+{
+    size_t body_length;
+    size_t extra_periods = 0;
+    size_t output_length;
+    size_t input_index;
+    size_t output_index = 0;
+    int at_line_start = 1;
+    char *stuffed_body;
+
+    if (body == NULL)
+    {
+        return NULL;
+    }
+
+    body_length = strlen(body);
+    for (input_index = 0; input_index < body_length; input_index++)
+    {
+        if (at_line_start && body[input_index] == '.')
+        {
+            extra_periods++;
+        }
+        at_line_start = body[input_index] == '\n';
+    }
+
+    output_length = body_length + extra_periods + 1;
+    stuffed_body = malloc(output_length);
+    if (stuffed_body == NULL)
+    {
+        return NULL;
+    }
+
+    at_line_start = 1;
+    for (input_index = 0; input_index < body_length; input_index++)
+    {
+        if (at_line_start && body[input_index] == '.')
+        {
+            stuffed_body[output_index++] = '.';
+        }
+        stuffed_body[output_index++] = body[input_index];
+        at_line_start = body[input_index] == '\n';
+    }
+    stuffed_body[output_index] = '\0';
+
+    return stuffed_body;
+}
+
 int init_socket(const char *host, int port)
 {
     int sock_fd;
+
+    if (port < 0 || port > UINT16_MAX)
+    {
+        fprintf(stderr, "Invalid port.\r\n");
+        return -1;
+    }
 
     struct hostent *server = gethostbyname(host);
     if (server == NULL)
     {
         fprintf(stderr, "Host lookup failed.\r\n");
+        return -1;
+    }
+
+    if (server->h_length <= 0 ||
+        (size_t)server->h_length > sizeof(((struct sockaddr_in *)0)->sin_addr.s_addr))
+    {
+        fprintf(stderr, "Invalid host address length.\r\n");
         return -1;
     }
 
@@ -126,8 +205,8 @@ int init_socket(const char *host, int port)
     struct sockaddr_in addr;
     memset(&addr, 0, sizeof(addr));
     addr.sin_family = AF_INET;
-    addr.sin_port = htons(port);
-    memcpy(&addr.sin_addr.s_addr, server->h_addr, server->h_length);
+    addr.sin_port = htons((uint16_t)port);
+    memcpy(&addr.sin_addr.s_addr, server->h_addr, (size_t)server->h_length);
 
     if (connect(sock_fd, (struct sockaddr *)&addr, sizeof(addr)) < 0)
     {

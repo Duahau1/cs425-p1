@@ -98,14 +98,30 @@ int main(int argc, char *argv[])
     }
 
     // 4. headers and body
-    snprintf(cmd, BUF_SIZE,
-             "Subject: %s\r\n"
-             "From: %s\r\n"
-             "To: %s\r\n"
-             "\r\n" // blank line ends headers
-             "%s\r\n"
-             ".\r\n", // line with only a period ends the body
-             request->subject, request->sender, request->receiver, request->body);
+    char *stuffed_body = dot_stuff_body(request->body);
+    if (stuffed_body == NULL)
+    {
+        close(sock);
+        free(request);
+        return EXIT_FAILURE;
+    }
+
+    int message_length = snprintf(cmd, BUF_SIZE,
+                                  "Subject: %s\r\n"
+                                  "From: %s\r\n"
+                                  "To: %s\r\n"
+                                  "\r\n" // blank line ends headers
+                                  "%s\r\n"
+                                  ".\r\n", // line with only a period ends the body
+                                  request->subject, request->sender, request->receiver, stuffed_body);
+    free(stuffed_body);
+    if (message_length < 0 || message_length >= BUF_SIZE)
+    {
+        fprintf(stderr, "Mail message is too long.\r\n");
+        close(sock);
+        free(request);
+        return EXIT_FAILURE;
+    }
     if (smtp_command(sock, cmd, 250) < 0)
     {
         close(sock);

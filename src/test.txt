@@ -1,1 +1,0 @@
-echo "This is the first message sent to the server." | ./build/release/myapp -f duahau1@boisestate.edu -t mailserver@example.com -s "Hello from my machine" -H onyx.boisestate.edu ec2-55.us-west-2.compute.amazonaws.com

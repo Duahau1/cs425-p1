@@ -12,7 +12,6 @@
 #include "harness/unity.h"
 
 #include "../src/lab.h"
-#include "../src/smtp.h"
 #include "../src/utils.h"
 
 void setUp(void)
@@ -95,6 +94,26 @@ void test_print_manual_outputs_usage_and_options(void)
   fclose(output);
 
   TEST_ASSERT_EQUAL_STRING(expected, actual);
+}
+
+void test_dot_stuff_body_escapes_periods_at_line_start(void)
+{
+  char *stuffed_body = dot_stuff_body(".first\nplain\n.second\n..third\n");
+
+  TEST_ASSERT_NOT_NULL(stuffed_body);
+  TEST_ASSERT_EQUAL_STRING("..first\nplain\n..second\n...third\n", stuffed_body);
+
+  free(stuffed_body);
+}
+
+void test_dot_stuff_body_preserves_periods_inside_lines(void)
+{
+  char *stuffed_body = dot_stuff_body("before .period\ntext\n");
+
+  TEST_ASSERT_NOT_NULL(stuffed_body);
+  TEST_ASSERT_EQUAL_STRING("before .period\ntext\n", stuffed_body);
+
+  free(stuffed_body);
 }
 
 void test_init_socket_returns_error_for_unknown_host(void)
@@ -449,6 +468,8 @@ int main(void)
 {
   UNITY_BEGIN();
   RUN_TEST(test_print_manual_outputs_usage_and_options);
+  RUN_TEST(test_dot_stuff_body_escapes_periods_at_line_start);
+  RUN_TEST(test_dot_stuff_body_preserves_periods_inside_lines);
   RUN_TEST(test_init_socket_returns_error_for_unknown_host);
   RUN_TEST(test_init_socket_returns_error_when_connection_fails);
   RUN_TEST(test_init_socket_returns_error_when_socket_creation_fails);
