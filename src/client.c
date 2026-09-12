@@ -8,7 +8,7 @@
 
 #include "utils.h"
 #include "smtp.h"
-#include "client.h"
+#include "lab.h"
 
 const char *OPT_STRING = "f:t:s:b:p:H:";
 

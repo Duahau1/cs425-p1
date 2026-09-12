@@ -11,7 +11,7 @@
 
 #include "harness/unity.h"
 
-#include "../src/client.h"
+#include "../src/lab.h"
 #include "../src/smtp.h"
 #include "../src/utils.h"
 
