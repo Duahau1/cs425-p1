@@ -178,6 +178,21 @@ void test_smtp_command_returns_error_when_send_fails(void)
   close(sockets[1]);
 }
 
+void test_smtp_command_with_transport_rejects_invalid_transport(void)
+{
+  int socket_fd = -1;
+  SMTP_TRANSPORT transport = socket_transport(&socket_fd);
+
+  TEST_ASSERT_EQUAL_INT(-1, smtp_command_with_transport(NULL, NULL, 0));
+
+  transport.send = NULL;
+  TEST_ASSERT_EQUAL_INT(-1, smtp_command_with_transport(&transport, NULL, 0));
+
+  transport = socket_transport(&socket_fd);
+  transport.receive = NULL;
+  TEST_ASSERT_EQUAL_INT(-1, smtp_command_with_transport(&transport, NULL, 0));
+}
+
 void test_smtp_command_reads_reply_without_sending_command(void)
 {
   int sockets[2];
@@ -440,6 +455,7 @@ int main(void)
   RUN_TEST(test_init_socket_connects_to_listening_server);
   RUN_TEST(test_smtp_command_sends_command_and_reads_reply);
   RUN_TEST(test_smtp_command_returns_error_when_send_fails);
+  RUN_TEST(test_smtp_command_with_transport_rejects_invalid_transport);
   RUN_TEST(test_smtp_command_reads_reply_without_sending_command);
   RUN_TEST(test_smtp_command_reads_multiline_reply);
   RUN_TEST(test_smtp_command_accepts_any_reply_when_expected_code_is_zero);

@@ -139,15 +139,45 @@ int init_socket(const char *host, int port)
     return sock_fd;
 }
 
-int smtp_command(int socket_fd, const char *cmd, int expected_code)
+static ssize_t socket_send(void *context, const void *buffer, size_t length)
+{
+    int socket_fd = *(int *)context;
+
+    return send(socket_fd, buffer, length, 0);
+}
+
+static ssize_t socket_receive(void *context, void *buffer, size_t length)
+{
+    int socket_fd = *(int *)context;
+
+    return recv(socket_fd, buffer, length, 0);
+}
+
+SMTP_TRANSPORT socket_transport(int *socket_fd)
+{
+    SMTP_TRANSPORT transport = {
+        .context = socket_fd,
+        .send = socket_send,
+        .receive = socket_receive};
+
+    return transport;
+}
+
+int smtp_command_with_transport(const SMTP_TRANSPORT *transport,
+                                const char *cmd, int expected_code)
 {
     char buf[BUF_SIZE];
     int line_length = 0;
     int reply_code = -1;
 
+    if (transport == NULL || transport->send == NULL || transport->receive == NULL)
+    {
+        return -1;
+    }
+
     if (cmd != NULL)
     {
-        if (send(socket_fd, cmd, strlen(cmd), 0) < 0)
+        if (transport->send(transport->context, cmd, strlen(cmd)) < 0)
         {
             perror("SMTP send failed");
             return -1;
@@ -158,7 +188,7 @@ int smtp_command(int socket_fd, const char *cmd, int expected_code)
     while (line_length < BUF_SIZE - 1)
     {
         char character;
-        ssize_t received = recv(socket_fd, &character, 1, 0);
+        ssize_t received = transport->receive(transport->context, &character, 1);
 
         if (received <= 0)
         {
@@ -216,4 +246,11 @@ int smtp_command(int socket_fd, const char *cmd, int expected_code)
     }
 
     return reply_code;
+}
+
+int smtp_command(int socket_fd, const char *cmd, int expected_code)
+{
+    SMTP_TRANSPORT transport = socket_transport(&socket_fd);
+
+    return smtp_command_with_transport(&transport, cmd, expected_code);
 }
