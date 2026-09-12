@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <dlfcn.h>
 #include <unistd.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -19,6 +20,43 @@ void setUp(void)
 
 void tearDown(void)
 {
+}
+
+static int mock_socket_should_fail;
+static int mock_send_should_fail;
+
+int socket(int domain, int type, int protocol)
+{
+  static int (*real_socket)(int, int, int);
+
+  if (mock_socket_should_fail)
+  {
+    return -1;
+  }
+
+  if (real_socket == NULL)
+  {
+    real_socket = (int (*)(int, int, int))dlsym(RTLD_NEXT, "socket");
+  }
+
+  return real_socket(domain, type, protocol);
+}
+
+ssize_t send(int socket_fd, const void *buffer, size_t length, int flags)
+{
+  static ssize_t (*real_send)(int, const void *, size_t, int);
+
+  if (mock_send_should_fail)
+  {
+    return -1;
+  }
+
+  if (real_send == NULL)
+  {
+    real_send = (ssize_t (*)(int, const void *, size_t, int))dlsym(RTLD_NEXT, "send");
+  }
+
+  return real_send(socket_fd, buffer, length, flags);
 }
 
 void test_print_manual_outputs_usage_and_options(void)
@@ -68,6 +106,15 @@ void test_init_socket_returns_error_when_connection_fails(void)
   TEST_ASSERT_EQUAL_INT(-1, init_socket("127.0.0.1", 0));
 }
 
+void test_init_socket_returns_error_when_socket_creation_fails(void)
+{
+  mock_socket_should_fail = 1;
+
+  TEST_ASSERT_EQUAL_INT(-1, init_socket("127.0.0.1", 25));
+
+  mock_socket_should_fail = 0;
+}
+
 void test_init_socket_connects_to_listening_server(void)
 {
   int listener = socket(AF_INET, SOCK_STREAM, 0);
@@ -112,6 +159,20 @@ void test_smtp_command_sends_command_and_reads_reply(void)
   command_buffer[command_length] = '\0';
   TEST_ASSERT_EQUAL_STRING("NOOP\r\n", command_buffer);
 
+  close(sockets[0]);
+  close(sockets[1]);
+}
+
+void test_smtp_command_returns_error_when_send_fails(void)
+{
+  int sockets[2];
+
+  TEST_ASSERT_EQUAL_INT(0, socketpair(AF_UNIX, SOCK_STREAM, 0, sockets));
+  mock_send_should_fail = 1;
+
+  TEST_ASSERT_EQUAL_INT(-1, smtp_command(sockets[0], "NOOP\r\n", 0));
+
+  mock_send_should_fail = 0;
   close(sockets[0]);
   close(sockets[1]);
 }
@@ -374,8 +435,10 @@ int main(void)
   RUN_TEST(test_print_manual_outputs_usage_and_options);
   RUN_TEST(test_init_socket_returns_error_for_unknown_host);
   RUN_TEST(test_init_socket_returns_error_when_connection_fails);
+  RUN_TEST(test_init_socket_returns_error_when_socket_creation_fails);
   RUN_TEST(test_init_socket_connects_to_listening_server);
   RUN_TEST(test_smtp_command_sends_command_and_reads_reply);
+  RUN_TEST(test_smtp_command_returns_error_when_send_fails);
   RUN_TEST(test_smtp_command_reads_reply_without_sending_command);
   RUN_TEST(test_smtp_command_reads_multiline_reply);
   RUN_TEST(test_smtp_command_accepts_any_reply_when_expected_code_is_zero);
