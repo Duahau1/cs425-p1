@@ -1,4 +1,3 @@
-#include "lab.h"
 #include "client.h"
 #include <stdio.h>
 #include <stdlib.h>
