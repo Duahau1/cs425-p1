@@ -41,8 +41,6 @@ void print_manual(void);
 
 REQUEST_HEADER *parse_opt(int argc, char *const argv[], const char *optstring);
 
-void prepare_smtp();
-
 int init_socket(const char *host, int port);
 
 int smtp_command(int sock, const char *cmd, int expected_code);

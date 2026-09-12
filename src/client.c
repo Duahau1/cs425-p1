@@ -105,13 +105,6 @@ REQUEST_HEADER *parse_opt(int argc, char *const argv[], const char *optstring)
     return requestHeader;
 }
 
-void prepare_smtp()
-{
-    char buffer[BUF_SIZE], bufferout[BUF_SIZE];
-    int buffer_offset = 0;
-    buffer[BUF_SIZE - 1] = '\0';
-}
-
 int init_socket(const char *host, int port)
 {
     int sock_fd;

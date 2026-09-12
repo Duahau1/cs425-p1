@@ -3,6 +3,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/socket.h>
+#include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
 
@@ -18,6 +19,80 @@ void setUp(void)
 
 void tearDown(void)
 {
+}
+
+void test_print_manual_outputs_usage_and_options(void)
+{
+  const char *expected =
+      "Usage: myapp -f <from> -t <to> [-s subject] [-b body] [-p port]"
+      " [-H helo-host] <server>\n"
+      "\n"
+      "Options:\n"
+      "  -f <from>       Envelope sender, for example you@example.com\n"
+      "  -t <to>         Envelope recipient\n"
+      "  -s <subject>    Subject line (default: empty)\n"
+      "  -b <body>       Message body (default: read from stdin)\n"
+      "  -p <port>       Port or service name (default: 25)\n"
+      "  -H <helo-host>  Host name sent with HELO (default: localhost)\n"
+      "  <server>        Host name or address of the mail server\n";
+  FILE *output = tmpfile();
+  int saved_stdout;
+  char actual[1024];
+  size_t output_length;
+
+  TEST_ASSERT_NOT_NULL(output);
+  saved_stdout = dup(STDOUT_FILENO);
+  TEST_ASSERT_NOT_EQUAL(-1, saved_stdout);
+  TEST_ASSERT_NOT_EQUAL(-1, dup2(fileno(output), STDOUT_FILENO));
+
+  print_manual();
+  fflush(stdout);
+  TEST_ASSERT_NOT_EQUAL(-1, dup2(saved_stdout, STDOUT_FILENO));
+  close(saved_stdout);
+
+  rewind(output);
+  output_length = fread(actual, 1, sizeof(actual) - 1, output);
+  actual[output_length] = '\0';
+  fclose(output);
+
+  TEST_ASSERT_EQUAL_STRING(expected, actual);
+}
+
+void test_init_socket_returns_error_for_unknown_host(void)
+{
+  TEST_ASSERT_EQUAL_INT(-1, init_socket("host-does-not-exist.invalid", 25));
+}
+
+void test_init_socket_returns_error_when_connection_fails(void)
+{
+  TEST_ASSERT_EQUAL_INT(-1, init_socket("127.0.0.1", 0));
+}
+
+void test_init_socket_connects_to_listening_server(void)
+{
+  int listener = socket(AF_INET, SOCK_STREAM, 0);
+  struct sockaddr_in address;
+  socklen_t address_length = sizeof(address);
+  int client;
+  int accepted;
+
+  TEST_ASSERT_NOT_EQUAL(-1, listener);
+  memset(&address, 0, sizeof(address));
+  address.sin_family = AF_INET;
+  address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+  address.sin_port = htons(0);
+  TEST_ASSERT_EQUAL_INT(0, bind(listener, (struct sockaddr *)&address, sizeof(address)));
+  TEST_ASSERT_EQUAL_INT(0, getsockname(listener, (struct sockaddr *)&address, &address_length));
+  TEST_ASSERT_EQUAL_INT(0, listen(listener, 1));
+
+  client = init_socket("127.0.0.1", ntohs(address.sin_port));
+  TEST_ASSERT_NOT_EQUAL(-1, client);
+  accepted = accept(listener, NULL, NULL);
+  TEST_ASSERT_NOT_EQUAL(-1, accepted);
+
+  close(accepted);
+  close(client);
+  close(listener);
 }
 
 void test_parse_opt_rejects_invalid_arguments(void)
@@ -164,6 +239,10 @@ void test_parse_opt_can_be_called_repeatedly(void)
 int main(void)
 {
   UNITY_BEGIN();
+  RUN_TEST(test_print_manual_outputs_usage_and_options);
+  RUN_TEST(test_init_socket_returns_error_for_unknown_host);
+  RUN_TEST(test_init_socket_returns_error_when_connection_fails);
+  RUN_TEST(test_init_socket_connects_to_listening_server);
   RUN_TEST(test_parse_opt_rejects_invalid_arguments);
   RUN_TEST(test_parse_opt_uses_defaults);
   RUN_TEST(test_parse_opt_reads_all_options);
