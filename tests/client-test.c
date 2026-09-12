@@ -95,6 +95,138 @@ void test_init_socket_connects_to_listening_server(void)
   close(listener);
 }
 
+void test_smtp_command_sends_command_and_reads_reply(void)
+{
+  int sockets[2];
+  char command_buffer[32];
+  const char *reply = "250 OK\r\n";
+  ssize_t command_length;
+
+  TEST_ASSERT_EQUAL_INT(0, socketpair(AF_UNIX, SOCK_STREAM, 0, sockets));
+  TEST_ASSERT_EQUAL_INT((int)strlen(reply),
+                        (int)send(sockets[1], reply, strlen(reply), 0));
+  TEST_ASSERT_EQUAL_INT(250, smtp_command(sockets[0], "NOOP\r\n", 250));
+
+  command_length = recv(sockets[1], command_buffer, sizeof(command_buffer), 0);
+  TEST_ASSERT_EQUAL_INT(6, command_length);
+  command_buffer[command_length] = '\0';
+  TEST_ASSERT_EQUAL_STRING("NOOP\r\n", command_buffer);
+
+  close(sockets[0]);
+  close(sockets[1]);
+}
+
+void test_smtp_command_reads_reply_without_sending_command(void)
+{
+  int sockets[2];
+  const char *reply = "220 Ready\r\n";
+
+  TEST_ASSERT_EQUAL_INT(0, socketpair(AF_UNIX, SOCK_STREAM, 0, sockets));
+  TEST_ASSERT_EQUAL_INT((int)strlen(reply),
+                        (int)send(sockets[1], reply, strlen(reply), 0));
+  TEST_ASSERT_EQUAL_INT(220, smtp_command(sockets[0], NULL, 220));
+
+  close(sockets[0]);
+  close(sockets[1]);
+}
+
+void test_smtp_command_reads_multiline_reply(void)
+{
+  int sockets[2];
+  const char *reply = "250-first line\r\n250-second line\r\n250 final\r\n";
+
+  TEST_ASSERT_EQUAL_INT(0, socketpair(AF_UNIX, SOCK_STREAM, 0, sockets));
+  TEST_ASSERT_EQUAL_INT((int)strlen(reply),
+                        (int)send(sockets[1], reply, strlen(reply), 0));
+  TEST_ASSERT_EQUAL_INT(250, smtp_command(sockets[0], NULL, 250));
+
+  close(sockets[0]);
+  close(sockets[1]);
+}
+
+void test_smtp_command_accepts_any_reply_when_expected_code_is_zero(void)
+{
+  int sockets[2];
+  const char *reply = "550 Not available\r\n";
+
+  TEST_ASSERT_EQUAL_INT(0, socketpair(AF_UNIX, SOCK_STREAM, 0, sockets));
+  TEST_ASSERT_EQUAL_INT((int)strlen(reply),
+                        (int)send(sockets[1], reply, strlen(reply), 0));
+  TEST_ASSERT_EQUAL_INT(550, smtp_command(sockets[0], NULL, 0));
+
+  close(sockets[0]);
+  close(sockets[1]);
+}
+
+void test_smtp_command_rejects_invalid_reply_code(void)
+{
+  int sockets[2];
+  const char *reply = "25x Invalid\r\n";
+
+  TEST_ASSERT_EQUAL_INT(0, socketpair(AF_UNIX, SOCK_STREAM, 0, sockets));
+  TEST_ASSERT_EQUAL_INT((int)strlen(reply),
+                        (int)send(sockets[1], reply, strlen(reply), 0));
+  TEST_ASSERT_EQUAL_INT(-1, smtp_command(sockets[0], NULL, 0));
+
+  close(sockets[0]);
+  close(sockets[1]);
+}
+
+void test_smtp_command_rejects_invalid_reply_delimiter(void)
+{
+  int sockets[2];
+  const char *reply = "250x Invalid\r\n";
+
+  TEST_ASSERT_EQUAL_INT(0, socketpair(AF_UNIX, SOCK_STREAM, 0, sockets));
+  TEST_ASSERT_EQUAL_INT((int)strlen(reply),
+                        (int)send(sockets[1], reply, strlen(reply), 0));
+  TEST_ASSERT_EQUAL_INT(-1, smtp_command(sockets[0], NULL, 0));
+
+  close(sockets[0]);
+  close(sockets[1]);
+}
+
+void test_smtp_command_rejects_disconnected_server(void)
+{
+  int sockets[2];
+
+  TEST_ASSERT_EQUAL_INT(0, socketpair(AF_UNIX, SOCK_STREAM, 0, sockets));
+  close(sockets[1]);
+  TEST_ASSERT_EQUAL_INT(-1, smtp_command(sockets[0], NULL, 0));
+
+  close(sockets[0]);
+}
+
+void test_smtp_command_rejects_oversized_reply(void)
+{
+  int sockets[2];
+  char reply[BUF_SIZE];
+
+  memset(reply, 'A', sizeof(reply));
+  reply[sizeof(reply) - 1] = '\n';
+  TEST_ASSERT_EQUAL_INT(0, socketpair(AF_UNIX, SOCK_STREAM, 0, sockets));
+  TEST_ASSERT_EQUAL_INT((int)sizeof(reply),
+                        (int)send(sockets[1], reply, sizeof(reply), 0));
+  TEST_ASSERT_EQUAL_INT(-1, smtp_command(sockets[0], NULL, 0));
+
+  close(sockets[0]);
+  close(sockets[1]);
+}
+
+void test_smtp_command_rejects_unexpected_reply_code(void)
+{
+  int sockets[2];
+  const char *reply = "250 OK\r\n";
+
+  TEST_ASSERT_EQUAL_INT(0, socketpair(AF_UNIX, SOCK_STREAM, 0, sockets));
+  TEST_ASSERT_EQUAL_INT((int)strlen(reply),
+                        (int)send(sockets[1], reply, strlen(reply), 0));
+  TEST_ASSERT_EQUAL_INT(-1, smtp_command(sockets[0], NULL, 220));
+
+  close(sockets[0]);
+  close(sockets[1]);
+}
+
 void test_parse_opt_rejects_invalid_arguments(void)
 {
   char *argv[] = {"myapp"};
@@ -243,6 +375,15 @@ int main(void)
   RUN_TEST(test_init_socket_returns_error_for_unknown_host);
   RUN_TEST(test_init_socket_returns_error_when_connection_fails);
   RUN_TEST(test_init_socket_connects_to_listening_server);
+  RUN_TEST(test_smtp_command_sends_command_and_reads_reply);
+  RUN_TEST(test_smtp_command_reads_reply_without_sending_command);
+  RUN_TEST(test_smtp_command_reads_multiline_reply);
+  RUN_TEST(test_smtp_command_accepts_any_reply_when_expected_code_is_zero);
+  RUN_TEST(test_smtp_command_rejects_invalid_reply_code);
+  RUN_TEST(test_smtp_command_rejects_invalid_reply_delimiter);
+  RUN_TEST(test_smtp_command_rejects_disconnected_server);
+  RUN_TEST(test_smtp_command_rejects_oversized_reply);
+  RUN_TEST(test_smtp_command_rejects_unexpected_reply_code);
   RUN_TEST(test_parse_opt_rejects_invalid_arguments);
   RUN_TEST(test_parse_opt_uses_defaults);
   RUN_TEST(test_parse_opt_reads_all_options);
