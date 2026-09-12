@@ -2,6 +2,9 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
+#ifdef TEST
+#include <dlfcn.h>
+#endif
 #include <unistd.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
@@ -9,6 +12,27 @@
 
 #include "utils.h"
 #include "lab.h"
+
+#ifdef TEST
+int mock_socket_should_fail;
+
+int socket(int domain, int type, int protocol)
+{
+    static int (*real_socket)(int, int, int);
+
+    if (mock_socket_should_fail)
+    {
+        return -1;
+    }
+
+    if (real_socket == NULL)
+    {
+        real_socket = (int (*)(int, int, int))dlsym(RTLD_NEXT, "socket");
+    }
+
+    return real_socket(domain, type, protocol);
+}
+#endif
 
 const char *OPT_STRING = "f:t:s:b:p:H:";
 const char *clientOption[OPTION_COUNT] = {

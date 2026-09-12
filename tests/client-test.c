@@ -22,27 +22,10 @@ void tearDown(void)
 {
 }
 
-static int mock_socket_should_fail;
+extern int mock_socket_should_fail;
 static int mock_send_should_fail;
 static int mock_malloc_should_fail;
 static int mock_host_length;
-
-int socket(int domain, int type, int protocol)
-{
-  static int (*real_socket)(int, int, int);
-
-  if (mock_socket_should_fail)
-  {
-    return -1;
-  }
-
-  if (real_socket == NULL)
-  {
-    real_socket = (int (*)(int, int, int))dlsym(RTLD_NEXT, "socket");
-  }
-
-  return real_socket(domain, type, protocol);
-}
 
 ssize_t send(int socket_fd, const void *buffer, size_t length, int flags)
 {
