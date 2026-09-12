@@ -31,7 +31,6 @@ int main(int argc, char *argv[])
         char line[256];
         size_t body_length = 0;
 
-        printf("Enter mail body (blank line to finish):\n");
         while (fgets(line, sizeof(line), stdin) != NULL && line[0] != '\n')
         {
             size_t line_length = strlen(line);
