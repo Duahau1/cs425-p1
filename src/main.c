@@ -13,7 +13,7 @@ int main(int argc, char *argv[])
     if (argc == 1)
     {
         print_manual();
-        return 1;
+        return 0;
     }
 
     REQUEST_HEADER *request = parse_opt(argc, argv, OPT_STRING);
@@ -22,7 +22,7 @@ int main(int argc, char *argv[])
     {
         print_manual();
         free(request);
-        return 1;
+        return 0;
     }
 
     char body[BUF_SIZE] = "";
