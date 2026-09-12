@@ -64,16 +64,16 @@ void test_print_manual_outputs_usage_and_options(void)
 {
   const char *expected =
       "Usage: myapp -f <from> -t <to> [-s subject] [-b body] [-p port]"
-      " [-H helo-host] <server>\r\n"
-      "\r\n"
-      "Options:\r\n"
-      "  -f <from>       Envelope sender, for example you@example.com\r\n"
-      "  -t <to>         Envelope recipient\r\n"
-      "  -s <subject>    Subject line (default: empty)\r\n"
-      "  -b <body>       Message body (default: read from stdin)\r\n"
-      "  -p <port>       Port or service name (default: 25)\r\n"
-      "  -H <helo-host>  Host name sent with HELO (default: localhost)\r\n"
-      "  <server>        Host name or address of the mail server\r\n";
+      " [-H helo-host] <server>\n"
+      "\n"
+      "Options:\n"
+      "  -f <from>       Envelope sender, for example you@example.com\n"
+      "  -t <to>         Envelope recipient\n"
+      "  -s <subject>    Subject line (default: empty)\n"
+      "  -b <body>       Message body (default: read from stdin)\n"
+      "  -p <port>       Port or service name (default: 25)\n"
+      "  -H <helo-host>  Host name sent with HELO (default: localhost)\n"
+      "  <server>        Host name or address of the mail server\n";
   FILE *output = tmpfile();
   int saved_stdout;
   char actual[1024];
