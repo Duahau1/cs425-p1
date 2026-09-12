@@ -234,13 +234,13 @@ int smtp_command_with_transport(const SMTP_TRANSPORT *transport,
 
     if (line_length != 0)
     {
-        fprintf(stderr, "SMTP reply is too long for the receive buffer\n");
+        fprintf(stderr, "SMTP reply is too long for the receive buffer\r\n");
         return -1;
     }
 
     if (expected_code != 0 && reply_code != expected_code)
     {
-        fprintf(stderr, "Unexpected SMTP reply: expected %d, server sent %d\n",
+        fprintf(stderr, "Unexpected SMTP reply: expected %d, server sent %d\r\n",
                 expected_code, reply_code);
         return -1;
     }
