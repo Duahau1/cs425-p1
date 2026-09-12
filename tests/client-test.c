@@ -24,6 +24,8 @@ void tearDown(void)
 
 static int mock_socket_should_fail;
 static int mock_send_should_fail;
+static int mock_malloc_should_fail;
+static int mock_host_length;
 
 int socket(int domain, int type, int protocol)
 {
@@ -57,6 +59,43 @@ ssize_t send(int socket_fd, const void *buffer, size_t length, int flags)
   }
 
   return real_send(socket_fd, buffer, length, flags);
+}
+
+void *malloc(size_t size)
+{
+  static void *(*real_malloc)(size_t);
+
+  if (mock_malloc_should_fail)
+  {
+    return NULL;
+  }
+
+  if (real_malloc == NULL)
+  {
+    real_malloc = (void *(*)(size_t))dlsym(RTLD_NEXT, "malloc");
+  }
+
+  return real_malloc(size);
+}
+
+struct hostent *gethostbyname(const char *name)
+{
+  static struct hostent *(*real_gethostbyname)(const char *);
+  static struct hostent mock_host;
+
+  if (mock_host_length != 0)
+  {
+    memset(&mock_host, 0, sizeof(mock_host));
+    mock_host.h_length = mock_host_length;
+    return &mock_host;
+  }
+
+  if (real_gethostbyname == NULL)
+  {
+    real_gethostbyname = (struct hostent * (*)(const char *)) dlsym(RTLD_NEXT, "gethostbyname");
+  }
+
+  return real_gethostbyname(name);
 }
 
 void test_print_manual_outputs_usage_and_options(void)
@@ -106,6 +145,20 @@ void test_dot_stuff_body_escapes_periods_at_line_start(void)
   free(stuffed_body);
 }
 
+void test_dot_stuff_body_returns_null_for_null_body(void)
+{
+  TEST_ASSERT_NULL(dot_stuff_body(NULL));
+}
+
+void test_dot_stuff_body_returns_null_when_allocation_fails(void)
+{
+  mock_malloc_should_fail = 1;
+
+  TEST_ASSERT_NULL(dot_stuff_body("body"));
+
+  mock_malloc_should_fail = 0;
+}
+
 void test_dot_stuff_body_preserves_periods_inside_lines(void)
 {
   char *stuffed_body = dot_stuff_body("before .period\ntext\n");
@@ -124,6 +177,23 @@ void test_init_socket_returns_error_for_unknown_host(void)
 void test_init_socket_returns_error_when_connection_fails(void)
 {
   TEST_ASSERT_EQUAL_INT(-1, init_socket("127.0.0.1", 0));
+}
+
+void test_init_socket_rejects_invalid_ports(void)
+{
+  TEST_ASSERT_EQUAL_INT(-1, init_socket("127.0.0.1", -1));
+  TEST_ASSERT_EQUAL_INT(-1, init_socket("127.0.0.1", 65536));
+}
+
+void test_init_socket_rejects_invalid_host_address_lengths(void)
+{
+  mock_host_length = -1;
+  TEST_ASSERT_EQUAL_INT(-1, init_socket("127.0.0.1", 25));
+
+  mock_host_length = sizeof(((struct sockaddr_in *)0)->sin_addr.s_addr) + 1;
+  TEST_ASSERT_EQUAL_INT(-1, init_socket("127.0.0.1", 25));
+
+  mock_host_length = 0;
 }
 
 void test_init_socket_returns_error_when_socket_creation_fails(void)
@@ -469,9 +539,13 @@ int main(void)
   UNITY_BEGIN();
   RUN_TEST(test_print_manual_outputs_usage_and_options);
   RUN_TEST(test_dot_stuff_body_escapes_periods_at_line_start);
+  RUN_TEST(test_dot_stuff_body_returns_null_for_null_body);
+  RUN_TEST(test_dot_stuff_body_returns_null_when_allocation_fails);
   RUN_TEST(test_dot_stuff_body_preserves_periods_inside_lines);
   RUN_TEST(test_init_socket_returns_error_for_unknown_host);
   RUN_TEST(test_init_socket_returns_error_when_connection_fails);
+  RUN_TEST(test_init_socket_rejects_invalid_ports);
+  RUN_TEST(test_init_socket_rejects_invalid_host_address_lengths);
   RUN_TEST(test_init_socket_returns_error_when_socket_creation_fails);
   RUN_TEST(test_init_socket_connects_to_listening_server);
   RUN_TEST(test_smtp_command_sends_command_and_reads_reply);

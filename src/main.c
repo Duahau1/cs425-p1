@@ -13,7 +13,7 @@ int main(int argc, char *argv[])
     if (argc == 1)
     {
         print_manual();
-        return EXIT_SUCCESS;
+        return 1;
     }
 
     REQUEST_HEADER *request = parse_opt(argc, argv, OPT_STRING);
@@ -38,7 +38,7 @@ int main(int argc, char *argv[])
             {
                 fprintf(stderr, "Mail body is too long.\r\n");
                 free(request);
-                return EXIT_FAILURE;
+                return 2;
             }
 
             memcpy(body + body_length, line, line_length);
@@ -103,7 +103,7 @@ int main(int argc, char *argv[])
     {
         close(sock);
         free(request);
-        return EXIT_FAILURE;
+        return 2;
     }
 
     int message_length = snprintf(cmd, BUF_SIZE,
@@ -120,7 +120,7 @@ int main(int argc, char *argv[])
         fprintf(stderr, "Mail message is too long.\r\n");
         close(sock);
         free(request);
-        return EXIT_FAILURE;
+        return 2;
     }
     if (smtp_command(sock, cmd, 250) < 0)
     {
